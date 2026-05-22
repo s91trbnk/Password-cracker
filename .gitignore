@@ -1,0 +1,30 @@
+# Wordlists — too large to commit (rockyou.txt is ~14GB)
+wordlists/*.txt
+wordlists/*.gz
+
+# Hash target files — may contain sensitive data
+hashes/*.txt
+hashes/*.hash
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Hashcat/John output
+*.pot
+*.log
+*.restore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
