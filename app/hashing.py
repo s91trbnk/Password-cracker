@@ -1,7 +1,6 @@
 import hashlib
-import crypt
-import os
 from pathlib import Path
+from passlib.hash import sha512_crypt
 
 
 SUPPORTED_ALGORITHMS = ["md5", "sha1", "sha256", "ntlm", "sha512crypt"]
@@ -21,8 +20,8 @@ def hash_password(password: str, algorithm: str) -> str:
         import hashlib
         return hashlib.new("md4", password.encode("utf-16-le")).hexdigest()
     elif algorithm == "sha512crypt":
-        # Linux /etc/shadow format ($6$...)
-        return crypt.crypt(password, crypt.mksalt(crypt.METHOD_SHA512))
+        # Linux /etc/shadow format ($6$...) — used in passlib instead of removed crypt module
+        return sha512_crypt.hash(password)
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
