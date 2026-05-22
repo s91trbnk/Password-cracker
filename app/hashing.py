@@ -17,7 +17,6 @@ def hash_password(password: str, algorithm: str) -> str:
         return hashlib.sha256(password.encode()).hexdigest()
     elif algorithm == "ntlm":
         # NTLM is MD4 of the UTF-16LE encoded password
-        import hashlib
         return hashlib.new("md4", password.encode("utf-16-le")).hexdigest()
     elif algorithm == "sha512crypt":
         # Linux /etc/shadow format ($6$...) — used in passlib instead of removed crypt module
