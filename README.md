@@ -26,7 +26,6 @@ pip install -r requirements.txt
 
 ## Setup
 
-<<<<<<< HEAD
 1. Run the app — a bundled wordlist (`wordlists/common.txt`) is included so no extra setup is needed:
    ```bash
    streamlit run main.py
@@ -36,12 +35,6 @@ pip install -r requirements.txt
    ```bash
    sudo gunzip /usr/share/wordlists/rockyou.txt.gz   # only needed once
    cp /usr/share/wordlists/rockyou.txt wordlists/
-   ```
-
-=======
-1. Run the app:
-   ```bash
-   streamlit run main.py
    ```
 ```
 >>>>>>> ae14fcc3156ee808c7cac234c54b0b4356c49f64
