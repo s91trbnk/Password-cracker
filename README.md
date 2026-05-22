@@ -37,7 +37,6 @@ pip install -r requirements.txt
    cp /usr/share/wordlists/rockyou.txt wordlists/
    ```
 ```
->>>>>>> ae14fcc3156ee808c7cac234c54b0b4356c49f64
 ## Modules
 
 | Module | File | Description |
