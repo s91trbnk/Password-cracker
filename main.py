@@ -3,7 +3,6 @@ from app.ui import page_strength_checker, page_hash_generator, page_cracker
 
 st.set_page_config(page_title="Password Security Lab", page_icon="🔐", layout="wide")
 st.title("Password Security Lab")
-st.caption("CSCI369 Ethical Hacking — Password Cracking Demo")
 
 page = st.sidebar.radio("Navigate", ["Strength Analyzer", "Hash Generator", "Dictionary Attack"])
 

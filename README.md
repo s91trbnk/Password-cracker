@@ -26,14 +26,15 @@ pip install -r requirements.txt
 
 ## Setup
 
-1. Add a wordlist to `wordlists/` — rockyou.txt is recommended:
-   ```bash
-   cp /usr/share/wordlists/rockyou.txt wordlists/
-   ```
-
-2. Run the app:
+1. Run the app — a bundled wordlist (`wordlists/common.txt`) is included so no extra setup is needed:
    ```bash
    streamlit run main.py
+   ```
+
+2. *(Optional)* For deeper cracking, add rockyou.txt to `wordlists/`:
+   ```bash
+   sudo gunzip /usr/share/wordlists/rockyou.txt.gz   # only needed once
+   cp /usr/share/wordlists/rockyou.txt wordlists/
    ```
 
 ## Modules
