@@ -16,7 +16,7 @@ sudo apt update && sudo apt install -y hashcat john
 
 ```bash
 git clone https://github.com/s91trbnk/Password-cracker
-cd password-cracker
+cd Password-cracker
 
 python3 -m venv .venv
 source .venv/bin/activate
