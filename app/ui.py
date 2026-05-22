@@ -6,8 +6,14 @@ from app.cracker import crack_with_hashcat, crack_with_john, HASHCAT_MODES, JOHN
 import plotly.graph_objects as go
 
 
-HASHES_DIR = Path("hashes")
-WORDLISTS_DIR = Path("wordlists")
+# Absolute paths based on project root — works regardless of where streamlit is called from
+PROJECT_ROOT = Path(__file__).parent.parent
+HASHES_DIR = PROJECT_ROOT / "hashes"
+WORDLISTS_DIR = PROJECT_ROOT / "wordlists"
+
+# Make sure directories exist
+HASHES_DIR.mkdir(exist_ok=True)
+WORDLISTS_DIR.mkdir(exist_ok=True)
 
 
 def page_strength_checker():
@@ -74,10 +80,10 @@ def page_cracker():
     wordlists = list(WORDLISTS_DIR.glob("*.txt"))
 
     if not hash_files:
-        st.warning("No hash files found in hashes/. Generate one first.")
+        st.warning(f"No hash files found in {HASHES_DIR}. Generate one first.")
         return
     if not wordlists:
-        st.warning("No wordlists found in wordlists/. Add rockyou.txt there.")
+        st.warning(f"No wordlists found in {WORDLISTS_DIR}. Add rockyou.txt or use the bundled common.txt.")
         return
 
     hash_file = st.selectbox("Target hash file", hash_files)

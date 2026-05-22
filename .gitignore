@@ -1,6 +1,8 @@
 # Wordlists — too large to commit (rockyou.txt is ~14GB)
-wordlists/*.txt
+wordlists/rockyou.txt
 wordlists/*.gz
+# Allow the bundled common wordlist
+!wordlists/common.txt
 
 # Hash target files — may contain sensitive data
 hashes/*.txt
