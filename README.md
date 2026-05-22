@@ -15,7 +15,7 @@ sudo apt update && sudo apt install -y hashcat john
 ## Installation
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/s91trbnk/Password-cracker
 cd password-cracker
 
 python3 -m venv .venv
