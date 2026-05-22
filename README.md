@@ -1,6 +1,6 @@
 # Password Security Lab
 
-CSCI369 Ethical Hacking — Password Strength Checker & Dictionary Attack Tool
+CSCI369 Ethical Hacking — Project
 
 ## Requirements
 
@@ -26,6 +26,7 @@ pip install -r requirements.txt
 
 ## Setup
 
+<<<<<<< HEAD
 1. Run the app — a bundled wordlist (`wordlists/common.txt`) is included so no extra setup is needed:
    ```bash
    streamlit run main.py
@@ -37,6 +38,13 @@ pip install -r requirements.txt
    cp /usr/share/wordlists/rockyou.txt wordlists/
    ```
 
+=======
+1. Run the app:
+   ```bash
+   streamlit run main.py
+   ```
+```
+>>>>>>> ae14fcc3156ee808c7cac234c54b0b4356c49f64
 ## Modules
 
 | Module | File | Description |
@@ -45,7 +53,9 @@ pip install -r requirements.txt
 | Hash Generator | `app/hashing.py` | Generate MD5/SHA1/SHA256/NTLM/sha512crypt hash files |
 | Dictionary Attack | `app/cracker.py` | Wraps hashcat and John the Ripper |
 | UI | `app/ui.py` | Streamlit pages |
-
+```
+```
 ## Ethical Use
 
 All testing must be performed in an isolated lab environment (VirtualBox/VMware with internal NAT). Do not use this tool against any public or production systems.
+```
