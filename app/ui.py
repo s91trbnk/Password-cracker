@@ -8,11 +8,13 @@ from app.cracker import (
 )
 import plotly.graph_objects as go
 import plotly.express as px
+import tempfile
+import os
 
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).parent.parent
-HASHES_DIR   = PROJECT_ROOT / "hashes"
+PROJECT_ROOT  = Path(__file__).parent.parent
+HASHES_DIR    = PROJECT_ROOT / "hashes"
 WORDLISTS_DIR = PROJECT_ROOT / "wordlists"
 HASHES_DIR.mkdir(exist_ok=True)
 WORDLISTS_DIR.mkdir(exist_ok=True)
@@ -25,6 +27,59 @@ def _get_hash_files():
 
 def _get_wordlists():
     return list(WORDLISTS_DIR.glob("*.txt"))
+
+
+def _resolve_hash_file(key_prefix: str) -> str | None:
+    """
+    Shared widget that lets the user provide a hash file three ways:
+      1. Paste hashes directly
+      2. Upload a file
+      3. Select an existing file from hashes/
+    Returns the path to the hash file to use, or None if nothing provided.
+    """
+    mode = st.radio(
+        "Hash input",
+        ["Paste hashes", "Upload a file", "Select existing file"],
+        horizontal=True,
+        key=f"{key_prefix}_mode",
+    )
+
+    if mode == "Paste hashes":
+        pasted = st.text_area(
+            "Paste hashes here (one per line)",
+            placeholder="5f4dcc3b5aa765d61d8327deb882cf99\nabc123...",
+            key=f"{key_prefix}_paste",
+            height=150,
+        )
+        if pasted.strip():
+            # Save to a temp file inside hashes/ so hashcat can read it
+            tmp_path = HASHES_DIR / f"_pasted_{key_prefix}.txt"
+            tmp_path.write_text(pasted.strip())
+            st.caption(f"Saved {len(pasted.strip().splitlines())} hash(es) to temp file.")
+            return str(tmp_path)
+        return None
+
+    elif mode == "Upload a file":
+        uploaded = st.file_uploader(
+            "Upload hash file (.txt or .hash)",
+            type=["txt", "hash"],
+            key=f"{key_prefix}_upload",
+        )
+        if uploaded:
+            save_path = HASHES_DIR / uploaded.name
+            save_path.write_bytes(uploaded.read())
+            st.caption(f"Saved to `{save_path}`")
+            return str(save_path)
+        return None
+
+    else:  # Select existing
+        files = _get_hash_files()
+        if not files:
+            st.warning(f"No hash files in `{HASHES_DIR}`. Paste hashes or upload a file instead.")
+            return None
+        selected = st.selectbox("Select hash file", files, key=f"{key_prefix}_select")
+        return str(selected)
+
 
 def _show_results(result: dict):
     """Shared results display used by all offline attack pages."""
@@ -41,7 +96,7 @@ def _show_results(result: dict):
         st.subheader("Cracked Passwords")
         st.table(result["cracked"])
 
-        labels    = [r["plaintext"] for r in result["cracked"]]
+        labels = [r["plaintext"] for r in result["cracked"]]
         fig = px.bar(
             x=labels, y=[1] * len(labels),
             labels={"x": "Password", "y": ""},
@@ -62,7 +117,7 @@ def _show_results(result: dict):
 
 def page_strength_checker():
     st.header("🔍 Password Strength Analyzer")
-    st.write("Analyze a password's entropy and complexity before or after cracking.")
+    st.write("Analyze a password's entropy and complexity.")
     password = st.text_input("Enter a password", type="password")
 
     if password:
@@ -103,7 +158,10 @@ def page_strength_checker():
 
 def page_hash_generator():
     st.header("⚙️ Hash Generator")
-    st.write("Simulate a stolen password database by generating a hash file from plaintext passwords.")
+    st.write(
+        "Convert plaintext passwords into hashes — simulates what a stolen password "
+        "database looks like. Use the output to test the attack modules."
+    )
 
     passwords_input = st.text_area("Enter passwords (one per line)", height=150)
     algorithm = st.selectbox("Hash Algorithm", SUPPORTED_ALGORITHMS)
@@ -116,7 +174,7 @@ def page_hash_generator():
             return
         out_path = HASHES_DIR / filename
         generate_hash_file(passwords, algorithm, str(out_path))
-        st.success(f"Hash file saved to: `{out_path}`")
+        st.success(f"Hash file saved to: `{out_path}` — now select it in any attack page.")
         rows = [{"plaintext": p, "hash": hash_password(p, algorithm)} for p in passwords]
         st.table(rows)
 
@@ -126,21 +184,19 @@ def page_hash_generator():
 def page_dictionary():
     st.header("📖 Dictionary Attack")
     st.info(
-        "**How it works:** Tries every word in a wordlist directly against the hash file. "
-        "Fast and effective against common passwords. Works best with **rockyou.txt** (14M passwords)."
+        "**How it works:** Tries every word in a wordlist directly against the hashes. "
+        "Fast and effective against common passwords. Best with **rockyou.txt** (14M passwords)."
     )
 
-    hash_files = _get_hash_files()
-    wordlists  = _get_wordlists()
-
-    if not hash_files:
-        st.warning(f"No hash files found in `{HASHES_DIR}`. Go to **Hash Generator** first.")
+    hash_file = _resolve_hash_file("dict")
+    if not hash_file:
         return
+
+    wordlists = _get_wordlists()
     if not wordlists:
         st.warning(f"No wordlists found in `{WORDLISTS_DIR}`. Add rockyou.txt or common.txt.")
         return
 
-    hash_file = st.selectbox("Target hash file", hash_files)
     wordlist  = st.selectbox("Wordlist", wordlists)
     algorithm = st.selectbox("Hash Algorithm", list(HASHCAT_MODES.keys()))
 
@@ -165,16 +221,14 @@ def page_brute_force():
     st.header("💪 Brute Force Attack")
     st.info(
         "**How it works:** Tries every possible character combination up to a given length. "
-        "Guaranteed to crack any password — but gets exponentially slower with more characters. "
+        "Guaranteed to crack any password — but gets exponentially slower with length. "
         "Best for short passwords (≤6 chars)."
     )
 
-    hash_files = _get_hash_files()
-    if not hash_files:
-        st.warning(f"No hash files found in `{HASHES_DIR}`. Go to **Hash Generator** first.")
+    hash_file = _resolve_hash_file("bf")
+    if not hash_file:
         return
 
-    hash_file = st.selectbox("Target hash file", hash_files)
     algorithm = st.selectbox("Hash Algorithm", list(HASHCAT_MODES.keys()))
 
     st.subheader("Character Set")
@@ -187,16 +241,15 @@ def page_brute_force():
 
     max_len = st.slider("Maximum password length", min_value=1, max_value=8, value=6)
 
-    # Time estimate warning
-    charset_size = sum([
-        26 if "Lowercase"  in c else
-        26 if "Uppercase"  in c else
-        10 if "Digits"     in c else
-        32 for c in selected
-    ])
     if selected:
+        charset_size = sum([
+            26 if "Lowercase" in c else
+            26 if "Uppercase" in c else
+            10 if "Digits"    in c else
+            32 for c in selected
+        ])
         total_combos = sum(charset_size ** i for i in range(1, max_len + 1))
-        st.caption(f"⚠️ Estimated combinations: **{total_combos:,}** — longer lengths may take a long time on CPU.")
+        st.caption(f"⚠️ Estimated combinations: **{total_combos:,}**")
 
     if st.button("▶ Start Brute Force Attack"):
         if not selected:
@@ -212,23 +265,20 @@ def page_brute_force():
 def page_hybrid():
     st.header("🔀 Hybrid Attack")
     st.info(
-        "**How it works:** Combines a wordlist with mutations. "
-        "Two modes: \n"
-        "- **Mask mode** — appends characters to each word (e.g. `password` → `password123`) \n"
-        "- **Rules mode** — applies transformation rules like l33tspeak, capitalization, reversal"
+        "**How it works:** Combines a wordlist with mutations.\n"
+        "- **Mask mode** — appends characters to each word (e.g. `password` → `password123`)\n"
+        "- **Rules mode** — applies transformations like l33tspeak, capitalization, reversal"
     )
 
-    hash_files = _get_hash_files()
-    wordlists  = _get_wordlists()
-
-    if not hash_files:
-        st.warning(f"No hash files found in `{HASHES_DIR}`. Go to **Hash Generator** first.")
+    hash_file = _resolve_hash_file("hybrid")
+    if not hash_file:
         return
+
+    wordlists = _get_wordlists()
     if not wordlists:
         st.warning(f"No wordlists found in `{WORDLISTS_DIR}`. Add rockyou.txt or common.txt.")
         return
 
-    hash_file = st.selectbox("Target hash file", hash_files)
     wordlist  = st.selectbox("Wordlist", wordlists)
     algorithm = st.selectbox("Hash Algorithm", list(HASHCAT_MODES.keys()))
 
@@ -238,14 +288,14 @@ def page_hybrid():
     rules_file  = None
 
     if mode == "Mask (append characters)":
-        st.markdown("**Mask tokens:** `?l`=lowercase · `?u`=uppercase · `?d`=digit · `?s`=special · `?a`=all")
-        append_mask = st.text_input("Mask to append to each word", value="?d?d?d",
-                                    help="e.g. ?d?d?d tries word000 through word999")
+        st.markdown("**Tokens:** `?l`=lowercase · `?u`=uppercase · `?d`=digit · `?s`=special")
+        append_mask = st.text_input("Mask to append", value="?d?d?d",
+                                    help="e.g. ?d?d?d → tries word000 to word999")
     else:
         rules = available_rules()
         if rules:
             rules_file = st.selectbox("Rule file", rules)
-            st.caption("Rules apply transformations like `Password` → `P@ssw0rd`, `p4ssword`, etc.")
+            st.caption("Applies transformations: `password` → `P@ssw0rd`, `p4ssword`, etc.")
         else:
             st.warning("No rule files found at /usr/share/hashcat/rules/. Switch to Mask mode.")
             return
@@ -262,7 +312,7 @@ def page_online():
     st.header("🌐 Online Attack (Hydra)")
     st.info(
         "**How it works:** Attacks a **live service** (SSH, FTP, etc.) on the target VM directly — "
-        "no hash file needed. Target should be your **Metasploitable VM** running in the isolated lab."
+        "no hash file needed. Target should be your **Metasploitable VM** in the isolated lab."
     )
     st.warning("⚠️ Only use this against your own lab VMs. Never against public or production systems.")
 
