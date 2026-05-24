@@ -26,7 +26,11 @@ pip install -r requirements.txt
 
 ## Setup
 
+<<<<<<< HEAD
 1. Run the app — a bundled wordlist (`wordlists/common.txt`) is included:
+=======
+1. Run the app — a bundled wordlist (`wordlists/common.txt`) is included so no extra setup is needed:
+>>>>>>> 0833198bcc7064dc4940bfb5beb715be46759232
    ```bash
    streamlit run main.py
    ```
@@ -36,8 +40,13 @@ pip install -r requirements.txt
    sudo gunzip /usr/share/wordlists/rockyou.txt.gz
    cp /usr/share/wordlists/rockyou.txt wordlists/
    ```
+<<<<<<< HEAD
 
 ## Attack Modules
+=======
+```
+## Modules
+>>>>>>> 0833198bcc7064dc4940bfb5beb715be46759232
 
 | Module | Type | Description |
 |--------|------|-------------|
