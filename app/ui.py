@@ -2,22 +2,67 @@ import streamlit as st
 from pathlib import Path
 from app.strength import check_strength
 from app.hashing import hash_password, generate_hash_file, SUPPORTED_ALGORITHMS
-from app.cracker import crack_with_hashcat, crack_with_john, HASHCAT_MODES, JOHN_FORMATS
+from app.cracker import (
+    crack_dictionary, crack_brute_force, crack_hybrid, crack_online,
+    HASHCAT_MODES, CHARSET_TOKENS, ONLINE_SERVICES, available_rules,
+)
 import plotly.graph_objects as go
+import plotly.express as px
 
 
-# Absolute paths based on project root — works regardless of where streamlit is called from
+# ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.parent
-HASHES_DIR = PROJECT_ROOT / "hashes"
+HASHES_DIR   = PROJECT_ROOT / "hashes"
 WORDLISTS_DIR = PROJECT_ROOT / "wordlists"
-
-# Make sure directories exist
 HASHES_DIR.mkdir(exist_ok=True)
 WORDLISTS_DIR.mkdir(exist_ok=True)
 
 
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+def _get_hash_files():
+    return list(HASHES_DIR.glob("*.txt")) + list(HASHES_DIR.glob("*.hash"))
+
+def _get_wordlists():
+    return list(WORDLISTS_DIR.glob("*.txt"))
+
+def _show_results(result: dict):
+    """Shared results display used by all offline attack pages."""
+    if "error" in result:
+        st.error(result["error"])
+        return
+
+    col1, col2 = st.columns(2)
+    col1.metric("Passwords Cracked", result["total_cracked"])
+    col2.metric("Time Taken", f"{result['elapsed_seconds']}s")
+
+    if result["cracked"]:
+        st.success(f"✅ {result['total_cracked']} password(s) cracked!")
+        st.subheader("Cracked Passwords")
+        st.table(result["cracked"])
+
+        labels    = [r["plaintext"] for r in result["cracked"]]
+        fig = px.bar(
+            x=labels, y=[1] * len(labels),
+            labels={"x": "Password", "y": ""},
+            title=f"{result['attack_type']} Attack — Cracked Passwords",
+            color=labels,
+        )
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No passwords cracked. Try a larger wordlist or different settings.")
+
+    if result.get("stderr"):
+        with st.expander("Tool output (debug)"):
+            st.code(result["stderr"])
+
+
+# ── Page 1: Strength Analyzer ─────────────────────────────────────────────────
+
 def page_strength_checker():
-    st.header("Password Strength Analyzer")
+    st.header("🔍 Password Strength Analyzer")
+    st.write("Analyze a password's entropy and complexity before or after cracking.")
     password = st.text_input("Enter a password", type="password")
 
     if password:
@@ -37,7 +82,7 @@ def page_strength_checker():
                 "axis": {"range": [0, 128]},
                 "bar": {"color": colors[result["score"]]},
                 "steps": [
-                    {"range": [0, 28], "color": "#ffcdd2"},
+                    {"range": [0,  28], "color": "#ffcdd2"},
                     {"range": [28, 36], "color": "#ffe0b2"},
                     {"range": [36, 60], "color": "#fff9c4"},
                     {"range": [60, 128], "color": "#c8e6c9"},
@@ -54,13 +99,15 @@ def page_strength_checker():
             st.success("No issues found.")
 
 
-def page_hash_generator():
-    st.header("Hash Generator")
-    st.write("Generate a hash file to use as a cracking target in the lab.")
+# ── Page 2: Hash Generator ────────────────────────────────────────────────────
 
-    passwords_input = st.text_area("Enter passwords (one per line)")
+def page_hash_generator():
+    st.header("⚙️ Hash Generator")
+    st.write("Simulate a stolen password database by generating a hash file from plaintext passwords.")
+
+    passwords_input = st.text_area("Enter passwords (one per line)", height=150)
     algorithm = st.selectbox("Hash Algorithm", SUPPORTED_ALGORITHMS)
-    filename = st.text_input("Output filename", value="target.txt")
+    filename  = st.text_input("Output filename", value="target.txt")
 
     if st.button("Generate Hash File"):
         passwords = [p.strip() for p in passwords_input.splitlines() if p.strip()]
@@ -69,52 +116,206 @@ def page_hash_generator():
             return
         out_path = HASHES_DIR / filename
         generate_hash_file(passwords, algorithm, str(out_path))
-        st.success(f"Saved to {out_path}")
-        st.code("\n".join([f"{hash_password(p, algorithm)}  ({p})" for p in passwords]))
+        st.success(f"Hash file saved to: `{out_path}`")
+        rows = [{"plaintext": p, "hash": hash_password(p, algorithm)} for p in passwords]
+        st.table(rows)
 
 
-def page_cracker():
-    st.header("Dictionary Attack")
+# ── Page 3: Dictionary Attack ─────────────────────────────────────────────────
 
-    hash_files = list(HASHES_DIR.glob("*.txt")) + list(HASHES_DIR.glob("*.hash"))
-    wordlists = list(WORDLISTS_DIR.glob("*.txt"))
+def page_dictionary():
+    st.header("📖 Dictionary Attack")
+    st.info(
+        "**How it works:** Tries every word in a wordlist directly against the hash file. "
+        "Fast and effective against common passwords. Works best with **rockyou.txt** (14M passwords)."
+    )
+
+    hash_files = _get_hash_files()
+    wordlists  = _get_wordlists()
 
     if not hash_files:
-        st.warning(f"No hash files found in {HASHES_DIR}. Generate one first.")
+        st.warning(f"No hash files found in `{HASHES_DIR}`. Go to **Hash Generator** first.")
         return
     if not wordlists:
-        st.warning(f"No wordlists found in {WORDLISTS_DIR}. Add rockyou.txt or use the bundled common.txt.")
+        st.warning(f"No wordlists found in `{WORDLISTS_DIR}`. Add rockyou.txt or common.txt.")
         return
 
     hash_file = st.selectbox("Target hash file", hash_files)
-    wordlist = st.selectbox("Wordlist", wordlists)
+    wordlist  = st.selectbox("Wordlist", wordlists)
     algorithm = st.selectbox("Hash Algorithm", list(HASHCAT_MODES.keys()))
-    tool = st.radio("Tool", ["hashcat", "john"])
 
-    if st.button("Start Attack"):
-        with st.spinner("Running attack..."):
-            if tool == "hashcat":
-                result = crack_with_hashcat(
-                    str(hash_file), str(wordlist), HASHCAT_MODES[algorithm]
-                )
-            else:
-                result = crack_with_john(
-                    str(hash_file), str(wordlist), JOHN_FORMATS[algorithm]
-                )
+    rules = available_rules()
+    use_rules = st.checkbox("Apply hashcat rules (stronger mutations)")
+    rules_file = None
+    if use_rules:
+        if rules:
+            rules_file = st.selectbox("Rule file", rules)
+        else:
+            st.warning("No rule files found at /usr/share/hashcat/rules/. Rules disabled.")
+
+    if st.button("▶ Start Dictionary Attack"):
+        with st.spinner("Running dictionary attack..."):
+            result = crack_dictionary(str(hash_file), str(wordlist), algorithm, rules_file)
+        _show_results(result)
+
+
+# ── Page 4: Brute Force Attack ────────────────────────────────────────────────
+
+def page_brute_force():
+    st.header("💪 Brute Force Attack")
+    st.info(
+        "**How it works:** Tries every possible character combination up to a given length. "
+        "Guaranteed to crack any password — but gets exponentially slower with more characters. "
+        "Best for short passwords (≤6 chars)."
+    )
+
+    hash_files = _get_hash_files()
+    if not hash_files:
+        st.warning(f"No hash files found in `{HASHES_DIR}`. Go to **Hash Generator** first.")
+        return
+
+    hash_file = st.selectbox("Target hash file", hash_files)
+    algorithm = st.selectbox("Hash Algorithm", list(HASHCAT_MODES.keys()))
+
+    st.subheader("Character Set")
+    charset_options = list(CHARSET_TOKENS.keys())
+    selected = []
+    cols = st.columns(len(charset_options))
+    for i, opt in enumerate(charset_options):
+        if cols[i].checkbox(opt, value=(i == 0)):
+            selected.append(opt)
+
+    max_len = st.slider("Maximum password length", min_value=1, max_value=8, value=6)
+
+    # Time estimate warning
+    charset_size = sum([
+        26 if "Lowercase"  in c else
+        26 if "Uppercase"  in c else
+        10 if "Digits"     in c else
+        32 for c in selected
+    ])
+    if selected:
+        total_combos = sum(charset_size ** i for i in range(1, max_len + 1))
+        st.caption(f"⚠️ Estimated combinations: **{total_combos:,}** — longer lengths may take a long time on CPU.")
+
+    if st.button("▶ Start Brute Force Attack"):
+        if not selected:
+            st.error("Select at least one character set.")
+            return
+        with st.spinner(f"Running brute force (up to {max_len} chars)..."):
+            result = crack_brute_force(str(hash_file), algorithm, selected, max_len)
+        _show_results(result)
+
+
+# ── Page 5: Hybrid Attack ─────────────────────────────────────────────────────
+
+def page_hybrid():
+    st.header("🔀 Hybrid Attack")
+    st.info(
+        "**How it works:** Combines a wordlist with mutations. "
+        "Two modes: \n"
+        "- **Mask mode** — appends characters to each word (e.g. `password` → `password123`) \n"
+        "- **Rules mode** — applies transformation rules like l33tspeak, capitalization, reversal"
+    )
+
+    hash_files = _get_hash_files()
+    wordlists  = _get_wordlists()
+
+    if not hash_files:
+        st.warning(f"No hash files found in `{HASHES_DIR}`. Go to **Hash Generator** first.")
+        return
+    if not wordlists:
+        st.warning(f"No wordlists found in `{WORDLISTS_DIR}`. Add rockyou.txt or common.txt.")
+        return
+
+    hash_file = st.selectbox("Target hash file", hash_files)
+    wordlist  = st.selectbox("Wordlist", wordlists)
+    algorithm = st.selectbox("Hash Algorithm", list(HASHCAT_MODES.keys()))
+
+    mode = st.radio("Hybrid mode", ["Mask (append characters)", "Rules (transformations)"])
+
+    append_mask = "?d?d?d"
+    rules_file  = None
+
+    if mode == "Mask (append characters)":
+        st.markdown("**Mask tokens:** `?l`=lowercase · `?u`=uppercase · `?d`=digit · `?s`=special · `?a`=all")
+        append_mask = st.text_input("Mask to append to each word", value="?d?d?d",
+                                    help="e.g. ?d?d?d tries word000 through word999")
+    else:
+        rules = available_rules()
+        if rules:
+            rules_file = st.selectbox("Rule file", rules)
+            st.caption("Rules apply transformations like `Password` → `P@ssw0rd`, `p4ssword`, etc.")
+        else:
+            st.warning("No rule files found at /usr/share/hashcat/rules/. Switch to Mask mode.")
+            return
+
+    if st.button("▶ Start Hybrid Attack"):
+        with st.spinner("Running hybrid attack..."):
+            result = crack_hybrid(str(hash_file), str(wordlist), algorithm, append_mask, rules_file)
+        _show_results(result)
+
+
+# ── Page 6: Online Attack ─────────────────────────────────────────────────────
+
+def page_online():
+    st.header("🌐 Online Attack (Hydra)")
+    st.info(
+        "**How it works:** Attacks a **live service** (SSH, FTP, etc.) on the target VM directly — "
+        "no hash file needed. Target should be your **Metasploitable VM** running in the isolated lab."
+    )
+    st.warning("⚠️ Only use this against your own lab VMs. Never against public or production systems.")
+
+    col1, col2 = st.columns(2)
+    target_ip = col1.text_input("Target IP", placeholder="e.g. 192.168.100.x")
+    service   = col2.selectbox("Service", ONLINE_SERVICES)
+
+    port = st.number_input("Port (0 = default)", min_value=0, max_value=65535, value=0)
+    port = int(port) if port > 0 else None
+
+    wordlists = _get_wordlists()
+    if not wordlists:
+        st.warning(f"No wordlists found in `{WORDLISTS_DIR}`. Add rockyou.txt or common.txt.")
+        return
+    wordlist = st.selectbox("Wordlist", wordlists)
+
+    auth_mode = st.radio("Authentication", ["Single username", "Username list file"])
+    username  = None
+    userlist  = None
+
+    if auth_mode == "Single username":
+        username = st.text_input("Username", placeholder="e.g. msfadmin")
+    else:
+        userlist_files = list(WORDLISTS_DIR.glob("*.txt"))
+        if userlist_files:
+            userlist = str(st.selectbox("Username list file", userlist_files))
+        else:
+            st.warning("No username list files found in wordlists/.")
+            return
+
+    threads = st.slider("Parallel threads", min_value=1, max_value=16, value=4)
+
+    if st.button("▶ Start Online Attack"):
+        if not target_ip:
+            st.error("Enter the target IP address.")
+            return
+        with st.spinner(f"Running Hydra against {service}://{target_ip} ..."):
+            result = crack_online(target_ip, service, str(wordlist), username, userlist, port, threads)
 
         if "error" in result:
             st.error(result["error"])
             return
 
-        st.success(f"Done in {result['elapsed_seconds']}s — {result['total_cracked']} cracked")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Target", result["target"])
+        col2.metric("Credentials Found", result["total_cracked"])
+        col3.metric("Time", f"{result['elapsed_seconds']}s")
 
         if result["cracked"]:
-            st.subheader("Cracked Passwords")
+            st.success("✅ Credentials found!")
             st.table(result["cracked"])
-
-            labels = [r["plaintext"] for r in result["cracked"]]
-            fig = go.Figure(go.Bar(x=labels, y=[1] * len(labels), text=labels))
-            fig.update_layout(title="Cracked Passwords", xaxis_title="Password", yaxis_title="Count")
-            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No passwords cracked with this wordlist.")
+            st.warning("No credentials found. Try a different wordlist or username.")
+
+        with st.expander("Full Hydra output"):
+            st.code(result.get("stdout", ""))

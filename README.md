@@ -1,15 +1,15 @@
 # Password Security Lab
 
-CSCI369 Ethical Hacking — Project
+CSCI369 Ethical Hacking — Password Cracking Tool
 
 ## Requirements
 
-- Kali Linux (or any Debian-based Linux)
+- Kali Linux
 - Python 3.11+
-- `hashcat` and/or `john` installed:
+- hashcat, john, hydra:
 
 ```bash
-sudo apt update && sudo apt install -y hashcat john
+sudo apt update && sudo apt install -y hashcat john hydra
 ```
 
 ## Installation
@@ -26,36 +26,34 @@ pip install -r requirements.txt
 
 ## Setup
 
-<<<<<<< HEAD
-1. Run the app — a bundled wordlist (`wordlists/common.txt`) is included so no extra setup is needed:
+1. Run the app — a bundled wordlist (`wordlists/common.txt`) is included:
    ```bash
    streamlit run main.py
    ```
 
-2. *(Optional)* For deeper cracking, add rockyou.txt to `wordlists/`:
+2. *(Recommended)* Add rockyou.txt for full cracking power:
    ```bash
-   sudo gunzip /usr/share/wordlists/rockyou.txt.gz   # only needed once
+   sudo gunzip /usr/share/wordlists/rockyou.txt.gz
    cp /usr/share/wordlists/rockyou.txt wordlists/
    ```
 
-=======
-1. Run the app:
-   ```bash
-   streamlit run main.py
-   ```
-```
->>>>>>> ae14fcc3156ee808c7cac234c54b0b4356c49f64
-## Modules
+## Attack Modules
 
-| Module | File | Description |
+| Module | Type | Description |
 |--------|------|-------------|
-| Strength Analyzer | `app/strength.py` | Entropy calculation and complexity scoring |
-| Hash Generator | `app/hashing.py` | Generate MD5/SHA1/SHA256/NTLM/sha512crypt hash files |
-| Dictionary Attack | `app/cracker.py` | Wraps hashcat and John the Ripper |
-| UI | `app/ui.py` | Streamlit pages |
-```
-```
+| Dictionary Attack | Offline | Wordlist vs hash file — best with rockyou.txt |
+| Brute Force Attack | Offline | Every character combination up to N length |
+| Hybrid Attack | Offline | Wordlist + mutations (mask or hashcat rules) |
+| Online Attack | Online | Hydra against live SSH/FTP on Metasploitable VM |
+
+## Lab Setup (Online Attack)
+
+For the Online Attack module you need:
+- Metasploitable 2 VM running in VirtualBox (internal NAT network)
+- Note its IP: `ip addr` on the Metasploitable terminal
+- Enter that IP in the Online Attack page, select SSH or FTP
+
 ## Ethical Use
 
-All testing must be performed in an isolated lab environment (VirtualBox/VMware with internal NAT). Do not use this tool against any public or production systems.
-```
+All attacks must target student-built VMs in a local, isolated lab.
+Do not use this tool against any public or production systems.
